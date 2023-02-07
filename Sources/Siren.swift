@@ -12,21 +12,21 @@ import UIKit
 public final class Siren: NSObject {
     /// Return results or errors obtained from performing a version check with Siren.
     public typealias ResultsHandler = (Result<UpdateResults, KnownError>) -> Void
-
+    
     /// The Siren singleton. The main point of entry to the Siren library.
     public static let shared = Siren()
-
+    
     /// The manager that controls the App Store API that is
     /// used to fetch the latest version of the app.
     ///
     /// Defaults to the US App Store.
     public lazy var apiManager: APIManager = .default
-
+    
     /// The manager that controls the update alert's string localization and tint color.
     ///
     /// Defaults the string's lange localization to the user's device localization.
     public lazy var presentationManager: PresentationManager = .default
-
+    
     /// The manager that controls the type of alert that should be displayed
     /// and how often an alert should be displayed dpeneding on the type
     /// of update that is available relative to the installed version of the app
@@ -36,26 +36,26 @@ public final class Siren: NSObject {
     /// the user to skip updating the app until the next time the app becomes active or
     /// skipping the update all together until another version is released.
     public lazy var rulesManager: RulesManager = .default
-
+    
     /// The current installed version of your app.
     lazy var currentInstalledVersion: String? = Bundle.version()
-
+    
     /// The retained `NotificationCenter` observer that listens for `UIApplication.didBecomeActiveNotification` notifications.
     var applicationDidBecomeActiveObserver: NSObjectProtocol?
-
+    
     /// The retained `NotificationCenter` observer that listens for `UIApplication.willResignActiveNotification` notifications.
     var applicationWillResignActiveObserver: NSObjectProtocol?
-
+    
     /// The retained `NotificationCenter` observer that listens for `UIApplication.didEnterBackgroundNotification` notifications.
     var applicationDidEnterBackgroundObserver: NSObjectProtocol?
-
+    
     /// The last date that an alert was presented to the user.
     private var alertPresentationDate: Date? = UserDefaults.alertPresentationDate
-
+    
     /// Prevents the update dialog from not displaying when the user swipes down
     /// on a notification center notification to the bottom of screen when calling
     /// the Siren.shared.wail notificaiton using the `.onForeground` performCheck option.
-     private var appDidBecomeActiveWorkItem: DispatchWorkItem?
+    private var appDidBecomeActiveWorkItem: DispatchWorkItem?
     
     /// The minimal amount of time needed before calling the update notification
     /// after entering the app from a notificaiton.
@@ -87,7 +87,7 @@ public extension Siren {
     func wail(performCheck: PerformCheck = .onForeground,
               completion handler: ResultsHandler? = nil) {
         resultsHandler = handler
-
+        
         switch performCheck {
         case .onDemand:
             removeForegroundObservers()
@@ -95,22 +95,22 @@ public extension Siren {
         case .onForeground:
             addForegroundObservers()
         }
-
+        
         // Add background app state change observers.
         addBackgroundObservers()
     }
-
+    
     /// Launches the AppStore in two situations when the user clicked the `Update` button in the UIAlertController modal.
     ///
     /// This function is marked `public` as a convenience for those developers who decide to build a custom alert modal
     /// instead of using Siren's prebuilt update alert.
     func launchAppStore() {
         guard let appID = appID,
-            let url = URL(string: "https://itunes.apple.com/app/id\(appID)") else {
-                resultsHandler?(.failure(.malformedURL))
-                return
+              let url = URL(string: "https://itunes.apple.com/app/id\(appID)") else {
+            resultsHandler?(.failure(.malformedURL))
+            return
         }
-
+        
         DispatchQueue.main.async {
             UIApplication.shared.open(url, options: [:], completionHandler: nil)
         }
@@ -141,7 +141,7 @@ private extension Siren {
             // Do nothing. Silences exhaustive error.
         }
     }
-
+    
     /// Validates the parsed and mapped iTunes Lookup Model
     /// to guarantee all the relevant data was returned before
     /// attempting to present an alert.
@@ -153,51 +153,51 @@ private extension Siren {
             resultsHandler?(.failure(.appStoreOSVersionUnsupported))
             return
         }
-
+        
         // Check and store the App ID .
         guard let results = apiModel.results.first,
-            let appID = apiModel.results.first?.appID else {
+              let appID = apiModel.results.first?.appID else {
             resultsHandler?(.failure(.appStoreAppIDFailure))
             return
         }
         self.appID = appID
-
+        
         // Check and store the current App Store version.
         guard let currentAppStoreVersion = apiModel.results.first?.version else {
             resultsHandler?(.failure(.appStoreVersionArrayFailure))
             return
         }
-
+        
         // Check if the App Store version is newer than the currently installed version.
         guard DataParser.isAppStoreVersionNewer(installedVersion: currentInstalledVersion,
                                                 appStoreVersion: currentAppStoreVersion) else {
             resultsHandler?(.failure(.noUpdateAvailable))
             return
         }
-
+        
         // Check the release date of the current version.
         guard let currentVersionReleaseDate = apiModel.results.first?.currentVersionReleaseDate,
-            let daysSinceRelease = Date.days(since: currentVersionReleaseDate) else {
-                resultsHandler?(.failure(.currentVersionReleaseDate))
-                return
+              let daysSinceRelease = Date.days(since: currentVersionReleaseDate) else {
+            resultsHandler?(.failure(.currentVersionReleaseDate))
+            return
         }
-
+        
         // Check if applicaiton has been released for the amount of days defined by the app consuming Siren.
         guard daysSinceRelease >= rulesManager.releasedForDays else {
             resultsHandler?(.failure(.releasedTooSoon(daysSinceRelease: daysSinceRelease,
                                                       releasedForDays: rulesManager.releasedForDays)))
             return
         }
-
+        
         let model = Model(appID: appID,
                           currentVersionReleaseDate: currentVersionReleaseDate,
                           minimumOSVersion: results.minimumOSVersion,
                           releaseNotes: results.releaseNotes,
                           version: results.version)
-
+        
         determineIfAlertPresentationRulesAreSatisfied(forCurrentAppStoreVersion: currentAppStoreVersion, andModel: model)
     }
-
+    
     /// Determines if the update alert can be presented based on the
     /// rules set in the `RulesManager` and the the skip version settings.
     ///
@@ -209,7 +209,7 @@ private extension Siren {
                                                    andAppStoreVersion: currentAppStoreVersion)
         do {
             let rules = try rulesManager.loadRulesForUpdateType(updateType)
-
+            
             // Did the user:
             // - request to skip being prompted with version update alerts for a specific version
             // - and is the latest App Store update the same version that was requested
@@ -221,9 +221,9 @@ private extension Siren {
                rules.alertType != .force {
                 resultsHandler?(.failure(.skipVersionUpdate(installedVersion: currentInstalledVersion,
                                                             appStoreVersion: currentAppStoreVersion)))
-                    return
+                return
             }
-
+            
             if rules.frequency == .immediately {
                 presentAlert(withRules: rules, forCurrentAppStoreVersion: currentAppStoreVersion, model: model, andUpdateType: updateType)
             } else {
@@ -243,7 +243,7 @@ private extension Siren {
             resultsHandler?(.failure(.noUpdateAvailable))
         }
     }
-
+    
     /// Presents the update alert to the end user.
     /// Upon tapping a value on the alert view, a completion handler will return all relevant metadata to the app.
     ///
@@ -256,18 +256,26 @@ private extension Siren {
                       forCurrentAppStoreVersion currentAppStoreVersion: String,
                       model: Model,
                       andUpdateType updateType: RulesManager.UpdateType) {
+        /// Call `resultHandler` before the alert is presented.
+        let results = UpdateResults(localization: self.presentationManager.localization,
+                                    model: model,
+                                    updateType: updateType)
+        
+        resultsHandler?(.success(results))
+        
+        // Show Alert Controller
         presentationManager.presentAlert(withRules: rules, forCurrentAppStoreVersion: currentAppStoreVersion) { [weak self] alertAction, currentAppStoreVersion in
             guard let self = self else { return }
             self.processAlertAction(alertAction: alertAction, currentAppStoreVersion: currentAppStoreVersion)
-
+            
             let results = UpdateResults(alertAction: alertAction,
-                                  localization: self.presentationManager.localization,
-                                  model: model,
-                                  updateType: updateType)
+                                        localization: self.presentationManager.localization,
+                                        model: model,
+                                        updateType: updateType)
             self.resultsHandler?(.success(results))
         }
     }
-
+    
     func processAlertAction(alertAction: AlertAction, currentAppStoreVersion: String?) {
         switch alertAction {
         case .appStore:
@@ -293,18 +301,18 @@ private extension Siren {
             .addObserver(forName: UIApplication.didBecomeActiveNotification,
                          object: nil,
                          queue: nil) { [weak self] _ in
-                            guard let self = self else { return }
-                            self.appDidBecomeActiveWorkItem = DispatchWorkItem {
-                                Task {
-                                    await self.performVersionCheck()
-                                }
-                            }
-                            if let appDidBecomeActiveWorkItem = self.appDidBecomeActiveWorkItem {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + self.appDidBecomeActiveWorkItemTimeDelay, execute: appDidBecomeActiveWorkItem)
-                            }
-        }
+                guard let self = self else { return }
+                self.appDidBecomeActiveWorkItem = DispatchWorkItem {
+                    Task {
+                        await self.performVersionCheck()
+                    }
+                }
+                if let appDidBecomeActiveWorkItem = self.appDidBecomeActiveWorkItem {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.appDidBecomeActiveWorkItemTimeDelay, execute: appDidBecomeActiveWorkItem)
+                }
+            }
     }
-
+    
     /// Adds an observer that listens for when the user enters the app switcher
     /// and when the app is sent to the background.
     func addBackgroundObservers() {
@@ -314,22 +322,22 @@ private extension Siren {
                 .addObserver(forName: UIApplication.willResignActiveNotification,
                              object: nil,
                              queue: nil) { [weak self] _ in
-                                guard let self = self else { return }
-                                self.appDidBecomeActiveWorkItem?.cancel()
-                                self.appDidBecomeActiveWorkItem = nil
-                                self.presentationManager.cleanUp()
-            }
+                    guard let self = self else { return }
+                    self.appDidBecomeActiveWorkItem?.cancel()
+                    self.appDidBecomeActiveWorkItem = nil
+                    self.presentationManager.cleanUp()
+                }
         }
-
+        
         if applicationDidEnterBackgroundObserver == nil {
             applicationDidEnterBackgroundObserver = NotificationCenter
                 .default
                 .addObserver(forName: UIApplication.didEnterBackgroundNotification,
                              object: nil,
                              queue: nil) { [weak self] _ in
-                                guard let self = self else { return }
-                                self.presentationManager.cleanUp()
-            }
+                    guard let self = self else { return }
+                    self.presentationManager.cleanUp()
+                }
         }
     }
 }
@@ -342,12 +350,12 @@ private extension Siren {
         NotificationCenter.default.removeObserver(applicationDidBecomeActiveObserver as Any)
         applicationDidBecomeActiveObserver = nil
     }
-
+    
     /// Remove the observers that list to app resignation and app backgrounding.
     func removeBackgroundObservers() {
         NotificationCenter.default.removeObserver(applicationWillResignActiveObserver as Any)
         applicationWillResignActiveObserver = nil
-
+        
         NotificationCenter.default.removeObserver(applicationDidEnterBackgroundObserver as Any)
         applicationDidEnterBackgroundObserver = nil
     }
